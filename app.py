@@ -843,13 +843,23 @@ def create_app(test_config=None):
     app = Flask(__name__)
     app.config['JSON_AS_ASCII'] = False
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL", "mysql+pymysql://root:r0gerd0rac0ni@localhost/campus_market")
+    # Render 的 PostgreSQL 連線字串會是 DATABASE_URL
+    db_url = os.getenv("DATABASE_URL")
+
+    if db_url:
+        # Render 的 DATABASE_URL 可能以 "postgres://" 開頭，需要替換
+        db_url = db_url.replace("postgres://", "postgresql://", 1)
+        app.config["SQLALCHEMY_DATABASE_URI"] = db_url
+    else:
+        # 本地開發環境（用 SQLite，不用 MySQL，比較簡單）
+        app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/local.db"
+
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    app.config["JWT_SECRET_KEY"] = os.getenv("JWT_SECRET_KEY", "dev_secret")
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL",
+    "postgresql+psycopg2://campus_market_user:ULluFgOA2E3IX8dAfSEWxurEzqggafiO@dpg-d4oq4lbe5dus73cf3pr0-a/campus_market@dpg-d4oq4lbe5dus73cf3pf0-a/campus_market")
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
-
-    app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024
+    app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB
 
     # JWT 設定（可用環境變數覆蓋）
     app.config['JWT_ACCESS_TOKEN_EXPIRES'] = timedelta(days=7)
