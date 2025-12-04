@@ -389,6 +389,8 @@ def list_items():
     print('收到 /items')  
     page = request.args.get("page", default=1, type=int)
     per_page = request.args.get("per_page", default=20, type=int)
+    #print(f'page={page}')
+    #print(f'per_page={per_page}')
     if per_page > 100:
         per_page = 100
 
@@ -398,6 +400,9 @@ def list_items():
     condition = request.args.get("condition")
     min_price = request.args.get("min_price", type=float)
     max_price = request.args.get("max_price", type=float)
+    seller_email = request.args.get("seller_email")
+    if category == "全部商品" : category = "" 
+
     query = Item.query
     if category: query = query.filter(Item.category.like(f"%{category}%"))
     if name: query = query.filter(Item.name.like(f"%{name}%"))
@@ -405,7 +410,8 @@ def list_items():
     if condition: query = query.filter(Item.condition == condition)
     if min_price is not None: query = query.filter(Item.price >= min_price)
     if max_price is not None: query = query.filter(Item.price <= max_price)
-
+    if seller_email: query = query.filter(Item.seller_email == seller_email)
+   
     pagination = query.order_by(Item.created_at.desc()).paginate(page=page, per_page=per_page, error_out=False)
     items = pagination.items
 
@@ -446,6 +452,8 @@ def get_item(item_id):
         "category": i.category, "condition": i.condition, "images": image_urls, "status": i.status,
         "seller_email": i.seller_email, "created_at": i.created_at.isoformat() if i.created_at else None
     }), 200
+
+
 
 @items_bp.route('/<int:item_id>', methods=['PUT'])
 @jwt_required()
@@ -537,6 +545,31 @@ def delete_item(item_id):
     db.session.delete(item)
     db.session.commit()
     return jsonify({"message": "商品已刪除"}), 200
+
+# ----- 540 用seller_email找尋刊登商品 ---
+'''
+@items_bp.route('/<seller_email>', methods=['GET'])
+def get_mysells(user_email):
+    print('api def get_mysells')  
+    sellers = Item.query.filter_by(seller_email=user_email).all()
+    result = []
+    for f in sellers:
+            trans =  Transaction.query.filter_by(item_id=f.item_id).all()
+            buyer_emails =[s.buyer_email for s in trans]
+
+            images = ItemImage.query.filter_by(item_id=f.item_id).order_by(ItemImage.order.asc()).all()
+            image_urls = [img.image_url for img in images]
+            result.append({
+                "id": f.item_id,
+                "name": f.name,
+                "price": f.price,
+                "description": f.description,
+                "condition": f.condition,
+                "images": image_urls,
+                "buyer_email": buyer_emails
+            })
+    return jsonify(result), 200
+'''
 
 # ---- Favorites ----
 @fav_bp.route('/', methods=['POST'])

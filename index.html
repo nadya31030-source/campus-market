@@ -3,18 +3,14 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>校園二手交易平台 — 單檔示範前端</title> 
+  <title>校園二手交易平台 — 單檔示範前端</title>
   <script src="https://cdn.tailwindcss.com"></script>
-
-  <!-- React + Babel (單檔開發用) -->
   <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
   <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-
   <style>
     body { background: linear-gradient(180deg,#f7fff8 0%,#ffffff 100%); }
     .app-max { max-width: 1100px; margin-left: auto; margin-right: auto; }
-    /* 小型調整 */
     .card { background: white; border-radius: .5rem; box-shadow: 0 4px 10px rgba(2,6,23,0.04); padding: 1rem; }
     .thumb { width:100%; height:160px; object-fit:cover; border-radius: .375rem; background:#f3f4f6 }
   </style>
@@ -46,16 +42,7 @@
 <div id="root" class="app-max"></div>
 
 <script type="text/babel">
-/* Single-file React 前端（與你提供的 Flask 後端配對）
-   - 一個檔案即可啟動（靜態檔放本機開啟或在前端伺服器上）
-   - 內含註冊/登入、商品列表、商品上架（multipart）、商品詳情、收藏、交易、個人資料、管理檢舉
-   - 修改後端位址請調整 API_BASE
-*/
-
-/* ========== Config & API helper ========== */
 const { useState, useEffect, useMemo, createContext, useContext } = React;
-
-// 預設後端位置：依你的後端運行位置修改
 const API_BASE = "http://127.0.0.1:5000";
 
 function getToken(){ return localStorage.getItem('cm_token') || null }
@@ -63,34 +50,24 @@ function setToken(t){ if(t) localStorage.setItem('cm_token', t); else localStora
 
 async function apiFetch(path, opts = {}) {
   const headers = opts.headers ? {...opts.headers} : {};
-  // 如果不是 FormData，預設為 JSON
   if (opts.body !== undefined && !(opts.body instanceof FormData)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
   const token = getToken();
   if (token) headers['Authorization'] = 'Bearer ' + token;
-
   const url = path.startsWith('http') ? path : API_BASE + path;
   const res = await fetch(url, { ...opts, headers, credentials: 'include' });
-
   const text = await res.text();
   let payload = null;
   try { payload = text ? JSON.parse(text) : null; } catch(e) { payload = text; }
-  if (!res.ok) {
-    // 統一拋出物件 {status, payload}
-    throw { status: res.status, payload };
-  }
+  if (!res.ok) { throw { status: res.status, payload }; }
   return payload;
 }
-
-// image url helper: 後端傳回 /static/images/xxx，需 prefix API_BASE
 function fixImageUrl(url){
   if(!url) return '';
   if(url.startsWith('http') || url.startsWith('data:')) return url;
   return API_BASE.replace(/\/$/, '') + url;
 }
-
-/* ========== App Context ========== */
 const AppCtx = createContext(null);
 function useApp(){ return useContext(AppCtx) }
 
@@ -106,63 +83,40 @@ function AppProvider({children}) {
       const res = await apiFetch(API_BASE + '/user/profile', { method: 'GET' });
       setUser(res);
     } catch(e){
-      console.warn('載入 profile 失敗, 清除 token', e);
       setToken(null);
       setUser(null);
     }
   }
-
-async function loadItems(params = {}) {
-  setLoadingItems(true);
-  try {
-    const qs = new URLSearchParams(params).toString();
-    const res = await apiFetch(API_BASE + '/items/?' + qs, { method: 'GET' });
-
-    setItems((res && res.items) ? res.items : []);
-
-    return res;   // return total items
-  } catch(e) {
-    console.error('載入商品失敗', e);
-    setItems([]);
-    return null;
-  } finally {
-    setLoadingItems(false);
+  async function loadItems(params = {}) {
+    setLoadingItems(true);
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await apiFetch(API_BASE + '/items/?' + qs, { method: 'GET' });
+      setItems((res && res.items) ? res.items : []);
+      return res;
+    } catch(e) {
+      setItems([]);
+      return null;
+    } finally {
+      setLoadingItems(false);
+    }
   }
-}
-
- useEffect(() => {
-  const run = async () => {
-    loadProfile();
-    const res = await loadItems(); // 等資料回來
-    console.log('total='+res.total)
-    if (res) setTotal(res.total);
-  };
-  run();
-}, []);
-
- async function register(email, password) {
-  const res = await fetch(API_BASE + "/auth/register", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ email, password })
-  });
-
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.message || "註冊失敗");
+  useEffect(() => { loadProfile(); }, []);
+  async function register(email, password) {
+    const res = await fetch(API_BASE + "/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { throw new Error(data.message || "註冊失敗"); }
+    return data;
   }
-
-  return data;
-}
-
   async function login(email, password){      
     const res = await apiFetch(API_BASE + '/auth/login', {
       method: 'POST',
-      headers: {
-        "Content-Type": "application/json"
-    },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
-  
     if(res && res.access_token){
       setToken(res.access_token);
       await loadProfile();
@@ -170,17 +124,14 @@ async function loadItems(params = {}) {
     return res;
   }
   function logout(){
-    // 告知後端（選做），並清除本地 token
     apiFetch(API_BASE + '/auth/logout', { method: 'POST' }).catch(()=>{});
     setToken(null);
     setUser(null);
   }
-
   async function updateProfile(patch){
     await apiFetch(API_BASE + '/user/profile', { method: 'PUT', body: JSON.stringify(patch) });
     await loadProfile();
   }
-
   async function uploadItem({name, price, category, description, condition, files=[]}){
     const fd = new FormData();
     fd.append('name', name);
@@ -193,25 +144,20 @@ async function loadItems(params = {}) {
     await loadItems();
     return res;
   }
-
   async function getItem(id){ return apiFetch(`/items/${id}`, { method: 'GET' }) }
   async function deleteItem(id){ const r = await apiFetch(`/items/${id}`, { method: 'DELETE' }); await loadItems(); return r }
   async function updateItem(id, body, isForm=false){ 
     return apiFetch(`/items/${id}`, { method: 'PUT', body: isForm ? body : JSON.stringify(body) });
   }
-
   async function addFavorite(item_id){ await apiFetch(API_BASE + '/favorite/', { method: 'POST', body: JSON.stringify({ item_id }) }) }
   async function removeFavorite(item_id){ await apiFetch(API_BASE + '/favorite/', { method: 'DELETE', body: JSON.stringify({ item_id }) }) }
   async function getFavorites(email){ return apiFetch(`/favorite/list/${encodeURIComponent(email)}`, { method: 'GET' }) }
-
   async function createTransaction(item_id){ return apiFetch(API_BASE + '/transaction/', { method: 'POST', body: JSON.stringify({ item_id }) }) }
   async function getTransactionsFor(email){ return apiFetch(`/transaction/list/${encodeURIComponent(email)}`, { method: 'GET' }) }
   async function updateTransactionStatus(txId, status){ return apiFetch(`/transaction/${txId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }) }
-
   async function createReport(target_type, target_id, reason){ return apiFetch(API_BASE + '/admin/report', { method: 'POST', body: JSON.stringify({ target_type, target_id, reason }) }) }
   async function getReports(){ return apiFetch(API_BASE + '/admin/reports', { method: 'GET' }) }
   async function adminDeleteItem(id){ return apiFetch(`/admin/item/${id}`, { method: 'DELETE' }) }
-
   return (
     <AppCtx.Provider value={{
       user, items, loadingItems,
@@ -226,9 +172,6 @@ async function loadItems(params = {}) {
     </AppCtx.Provider>
   )
 }
-
-/* ========== UI ========== */
-
 function App(){
   return (
     <AppProvider>
@@ -241,15 +184,15 @@ function App(){
           <aside className="space-y-4">
             <AuthPanel />
             <NewItemCard />
+            <MyItemsCard /> {/* 新增我上架的商品清單與下架功能 */}
             <MyOverview />
           </aside>
         </main>
-        <footer className="mt-6 text-xs text-gray-600 text-center">示範前端（與你的 Flask 後端 /auth、/items 等路由配合）。</footer>
+        <footer className="mt-6 text-xs text-gray-600 text-center">示範前端</footer>
       </div>
     </AppProvider>
   )
 }
-
 function Header(){
   const { user, logout } = useApp();
   return (
@@ -273,6 +216,69 @@ function Header(){
       </div>
     </header>
   )
+}
+/* 新增：我上架的商品與下架功能 */
+function MyItemsCard() {
+  const { user, deleteItem } = useApp();
+  const [myItems, setMyItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      fetch(`${API_BASE}/items/?seller_email=${encodeURIComponent(user.email)}`, {
+        headers: { Authorization: 'Bearer ' + getToken() }
+      })
+        .then(r => r.json())
+        .then(res => setMyItems(res.items || []))
+        .catch(() => setMyItems([]))
+        .finally(() => setLoading(false));
+    } else {
+      setMyItems([]);
+    }
+  }, [user]);
+  // 下架後即時前端移除該商品
+  async function handleDelete(id) {
+    if (!window.confirm("確定要下架/刪除這個商品嗎？")) return;
+    try {
+      await deleteItem(id);
+      setMyItems(mys => mys.filter(it => it.id !== id));
+      alert("已下架！");
+    } catch {
+      alert("下架失敗");
+    }
+  }
+  if (!user) return null;
+  return (
+    <div className="card">
+      <div className="font-semibold">我上架的商品 ({myItems.length})</div>
+      {loading ? (
+        <div>載入中...</div>
+      ) : myItems.length === 0 ? (
+        <div className="text-xs text-gray-500">尚未上架商品</div>
+      ) : (
+        <div className="mt-2 space-y-2 text-sm">
+          {myItems.map(item => (
+            <div key={item.id} className="flex items-center gap-2 border-b py-2">
+              <div className="w-12 h-12 bg-gray-100 overflow-hidden">
+                {item.images && item.images[0]
+                  ? <img src={fixImageUrl(item.images[0])} className="w-full h-full object-cover" />
+                  : <div className="text-xs text-gray-400 p-2">無圖</div>}
+              </div>
+              <div className="flex-1">
+                <div className="font-medium">{item.name}</div>
+                <div className="text-xs text-gray-500">NT$ {item.price}</div>
+                <div className="text-xs text-gray-400">{item.status}</div>
+              </div>
+              <button
+                className="px-2 py-1 bg-red-500 text-white rounded text-xs"
+                onClick={() => handleDelete(item.id)}
+              >下架</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 /* AuthPanel: 登入 / 註冊 / 顯示個人資料 */
@@ -348,7 +354,7 @@ function AuthPanel(){
     try {
       const res = await login(email, password);
       
-      setMsg('登入成功'+res.acces);
+      setMsg('登入成功');
      // user = res.access_token;
       setEmail(''); setPwd('');
     } catch(e){
@@ -438,13 +444,14 @@ function Explorer(){
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
-  const per_page = 20;
+  const per_page = 10; //一頁筆數
   const [total, setTotal] = useState(0); 
-  const totalPages = Math.ceil(total / 20);
+  const totalPages = Math.ceil(total / per_page);
 
   useEffect(() => {
   async function run() {
-    const res = await loadItems({ page, per_page, name: q , category: category });
+    console.log('useEffect 02')
+    const res = await loadItems({ page, per_page:per_page, name: q , category: category }); //第二次呼叫loadItems
     if (res) setTotal(res.total);
   }
   run();
@@ -454,10 +461,8 @@ function Explorer(){
     console.log('q='+q);
     console.log('category='+category);
     setPage(1);
-    //loadItems({ page:1, per_page, name: q || undefined, category: category || undefined });
-    if(q || category)    res = await loadItems({ page:1, per_page, name: q , category: category  });
-    else if(!q && !category)  res = await loadItems();
-  
+    if(q || category) res = await loadItems({ page:1, per_page:per_page, name: q , category: category  });
+    else if(!q && !category)  res = await loadItems();  
   }
 
   return (
@@ -466,7 +471,7 @@ function Explorer(){
         <div className="flex gap-2">
           <input className="flex-1 border rounded p-2" placeholder="搜尋商品名稱或描述" value={q} onChange={e=>setQ(e.target.value)} />          
           <select className="flex-1 border rounded p-2" value={category} onChange={e=>setCategory(e.target.value)}>
-            <option></option>
+            <option>全部商品</option>
             <option>書籍</option>
             <option>文具</option>
             <option>制服</option>
@@ -491,8 +496,8 @@ function Explorer(){
 
       <div className="mt-4 flex justify-center items-center gap-2">
         <button className="px-3 py-1 bg-gray-100 rounded" onClick={()=>setPage(p=>Math.max(1,p-1))}>上一頁</button>
-        <div className="px-3 py-1 card">第 {page}  / {totalPages} 頁 ( {total} 筆 ) </div>
-        <button className="px-3 py-1 bg-gray-100 rounded" onClick={()=>setPage(p=>p+1)}>下一頁</button>
+        <div className="px-3 py-1 card">第 {page}  / {totalPages} 頁</div>
+        <button className="px-3 py-1 bg-gray-100 rounded" onClick={()=>setPage(p=>Math.min(totalPages, p + 1))}>下一頁</button>
       </div>
     </div>
   )
@@ -535,7 +540,7 @@ function ItemCard({item}){
           </div>
           <div className="mt-2 text-sm text-gray-700 line-clamp-3">{item.description || '無描述'}</div>
 
-          <div className="mt-3 flex items-center gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-2">
             <button className="px-3 py-1 bg-primary-600 text-white rounded" onClick={()=>setShowDetail(true)}>查看</button>
             <button className="px-3 py-1 bg-gray-100 rounded" onClick={doFavorite}>收藏</button>
             <button className="px-3 py-1 bg-green-100 rounded" onClick={async ()=> {
@@ -723,7 +728,7 @@ function NewItemCard(){
   />
 
   <div className="text-xs text-gray-500">
-    最多 5 張。後端會驗證影像格式與大小。
+    最多 5 張。
   </div>
 
   <div className="mt-2 flex gap-2 flex-wrap">
@@ -797,6 +802,20 @@ function MyOverview(){
               <div className="font-medium text-sm">{i.name}</div>
               <div className="text-xs text-gray-500"> NT$ {i.price}</div>
             </div>
+             {/* 取消收藏按鈕 */} <button
+      className="text-red-500 text-xs hover:underline"
+      onClick={async (e) => {
+        e.stopPropagation();
+        await apiFetch(API_BASE + '/favorite/', {
+          method: 'DELETE',
+          body: JSON.stringify({ item_id: i.id })
+        });
+        alert("已取消收藏");
+      }}
+    >
+      取消
+    </button>
+   
           </div>)}
           {favs.length === 0 && <div className="text-xs text-gray-500">尚無收藏</div>}
         </div>
@@ -812,6 +831,8 @@ function MyOverview(){
           {txs.length===0 && <div className="text-xs text-gray-500">尚無交易</div>}
         </div>
     </div>
+
+   
       {/* ★ Modal 在這裡 */}
       {showItemModal && ( <ItemDetailModal itemId={showItemModal} onClose={() => setShowItemModal(null)}/> )}
 
