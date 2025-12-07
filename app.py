@@ -904,7 +904,8 @@ def create_app(test_config=None):
 
     return app
 
+app = create_app()
+
 # ---------- Run ----------
 if __name__ == '__main__':
-    app = create_app()
     app.run(host='0.0.0.0', port=int(os.getenv("PORT", 5000)), debug=True)
