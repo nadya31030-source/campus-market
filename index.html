@@ -1,0 +1,872 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>校園二手交易平台 — 單檔示範前端</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <style>
+    body { background: linear-gradient(180deg,#f7fff8 0%,#ffffff 100%); }
+    .app-max { max-width: 1100px; margin-left: auto; margin-right: auto; }
+    .card { background: white; border-radius: .5rem; box-shadow: 0 4px 10px rgba(2,6,23,0.04); padding: 1rem; }
+    .thumb { width:100%; height:160px; object-fit:cover; border-radius: .375rem; background:#f3f4f6 }
+  </style>
+<script>
+  tailwind.config = {
+    theme: {
+      extend: {
+        colors: {
+          primary: {
+            50: '#f0fdf4',
+            100: '#dcfce7',
+            200: '#bbf7d0',
+            300: '#86efac',
+            400: '#4ade80',
+            500: '#22c55e',
+            600: '#16a34a',
+            700: '#15803d',
+            800: '#166534',
+            900: '#14532d'
+          }
+        }
+      }
+    }
+  }
+</script>
+</head>
+<body class="min-h-screen text-gray-900 p-4">
+
+<div id="root" class="app-max"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, createContext, useContext } = React;
+const API_BASE = "http://127.0.0.1:5000";
+
+function getToken(){ return localStorage.getItem('cm_token') || null }
+function setToken(t){ if(t) localStorage.setItem('cm_token', t); else localStorage.removeItem('cm_token') }
+
+async function apiFetch(path, opts = {}) {
+  const headers = opts.headers ? {...opts.headers} : {};
+  if (opts.body !== undefined && !(opts.body instanceof FormData)) {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
+  const token = getToken();
+  if (token) headers['Authorization'] = 'Bearer ' + token;
+  const url = path.startsWith('http') ? path : API_BASE + path;
+  const res = await fetch(url, { ...opts, headers, credentials: 'include' });
+  const text = await res.text();
+  let payload = null;
+  try { payload = text ? JSON.parse(text) : null; } catch(e) { payload = text; }
+  if (!res.ok) { throw { status: res.status, payload }; }
+  return payload;
+}
+function fixImageUrl(url){
+  if(!url) return '';
+  if(url.startsWith('http') || url.startsWith('data:')) return url;
+  return API_BASE.replace(/\/$/, '') + url;
+}
+const AppCtx = createContext(null);
+function useApp(){ return useContext(AppCtx) }
+
+function AppProvider({children}) {
+  const [user, setUser] = useState(null);
+  const [items, setItems] = useState([]);
+  const [loadingItems, setLoadingItems] = useState(false);
+
+  async function loadProfile(){
+    const t = getToken();
+    if(!t){ setUser(null); return; }
+    try {
+      const res = await apiFetch(API_BASE + '/user/profile', { method: 'GET' });
+      setUser(res);
+    } catch(e){
+      setToken(null);
+      setUser(null);
+    }
+  }
+  async function loadItems(params = {}) {
+    setLoadingItems(true);
+    try {
+      const qs = new URLSearchParams(params).toString();
+      const res = await apiFetch(API_BASE + '/items/?' + qs, { method: 'GET' });
+      setItems((res && res.items) ? res.items : []);
+      return res;
+    } catch(e) {
+      setItems([]);
+      return null;
+    } finally {
+      setLoadingItems(false);
+    }
+  }
+  useEffect(() => { loadProfile(); }, []);
+  async function register(email, password) {
+    const res = await fetch(API_BASE + "/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password })
+    });
+    const data = await res.json();
+    if (!res.ok) { throw new Error(data.message || "註冊失敗"); }
+    return data;
+  }
+  async function login(email, password){      
+    const res = await apiFetch(API_BASE + '/auth/login', {
+      method: 'POST',
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email, password }) });
+    if(res && res.access_token){
+      setToken(res.access_token);
+      await loadProfile();
+    }
+    return res;
+  }
+  function logout(){
+    apiFetch(API_BASE + '/auth/logout', { method: 'POST' }).catch(()=>{});
+    setToken(null);
+    setUser(null);
+  }
+  async function updateProfile(patch){
+    await apiFetch(API_BASE + '/user/profile', { method: 'PUT', body: JSON.stringify(patch) });
+    await loadProfile();
+  }
+  async function uploadItem({name, price, category, description, condition, files=[]}){
+    const fd = new FormData();
+    fd.append('name', name);
+    fd.append('price', String(price));
+    fd.append('category', category);
+    if(description) fd.append('description', description);
+    if(condition) fd.append('condition', condition);
+    files.slice(0,5).forEach(f => fd.append('images', f));
+    const res = await apiFetch(API_BASE + '/items/upload', { method: 'POST', body: fd });
+    await loadItems();
+    return res;
+  }
+  async function getItem(id){ return apiFetch(`/items/${id}`, { method: 'GET' }) }
+  async function deleteItem(id){ const r = await apiFetch(`/items/${id}`, { method: 'DELETE' }); await loadItems(); return r }
+  async function updateItem(id, body, isForm=false){ 
+    return apiFetch(`/items/${id}`, { method: 'PUT', body: isForm ? body : JSON.stringify(body) });
+  }
+  async function addFavorite(item_id){ await apiFetch(API_BASE + '/favorite/', { method: 'POST', body: JSON.stringify({ item_id }) }) }
+  async function removeFavorite(item_id){ await apiFetch(API_BASE + '/favorite/', { method: 'DELETE', body: JSON.stringify({ item_id }) }) }
+  async function getFavorites(email){ return apiFetch(`/favorite/list/${encodeURIComponent(email)}`, { method: 'GET' }) }
+  async function createTransaction(item_id){ return apiFetch(API_BASE + '/transaction/', { method: 'POST', body: JSON.stringify({ item_id }) }) }
+  async function getTransactionsFor(email){ return apiFetch(`/transaction/list/${encodeURIComponent(email)}`, { method: 'GET' }) }
+  async function updateTransactionStatus(txId, status){ return apiFetch(`/transaction/${txId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }) }
+  async function createReport(target_type, target_id, reason){ return apiFetch(API_BASE + '/admin/report', { method: 'POST', body: JSON.stringify({ target_type, target_id, reason }) }) }
+  async function getReports(){ return apiFetch(API_BASE + '/admin/reports', { method: 'GET' }) }
+  async function adminDeleteItem(id){ return apiFetch(`/admin/item/${id}`, { method: 'DELETE' }) }
+  return (
+    <AppCtx.Provider value={{
+      user, items, loadingItems,
+      loadItems, loadProfile,
+      register, login, logout, updateProfile,
+      uploadItem, getItem, deleteItem, updateItem,
+      addFavorite, removeFavorite, getFavorites,
+      createTransaction, getTransactionsFor, updateTransactionStatus,
+      createReport, getReports, adminDeleteItem
+    }}>
+      {children}
+    </AppCtx.Provider>
+  )
+}
+function App(){
+  return (
+    <AppProvider>
+      <div className="card">
+        <Header />
+        <main className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
+          <section className="lg:col-span-2 space-y-4">
+            <Explorer />
+          </section>
+          <aside className="space-y-4">
+            <AuthPanel />
+            <NewItemCard />
+            <MyItemsCard /> {/* 新增我上架的商品清單與下架功能 */}
+            <MyOverview />
+          </aside>
+        </main>
+        <footer className="mt-6 text-xs text-gray-600 text-center">示範前端</footer>
+      </div>
+    </AppProvider>
+  )
+}
+function Header(){
+  const { user, logout } = useApp();
+  return (
+    <header className="flex items-center justify-between">
+      <div>
+        <h1 className="text-2xl font-bold text-primary-700">校園二手交易平台</h1>
+        <p className="text-sm text-gray-600">校內專用示範（不含金流）</p>
+      </div>
+      <div className="flex items-center gap-3">
+        {user ? (
+          <>
+            <div className="text-right">
+              <div className="font-medium">{user.nickname || user.email}</div>
+              <div className="text-xs text-gray-500">{user.email}</div>
+            </div>
+            <button className="px-3 py-1 bg-red-500 text-white rounded" onClick={() => { logout(); }}>登出</button>
+          </>
+        ) : (
+          <div className="text-sm text-gray-500">尚未登入</div>
+        )}
+      </div>
+    </header>
+  )
+}
+/* 新增：我上架的商品與下架功能 */
+function MyItemsCard() {
+  const { user, deleteItem } = useApp();
+  const [myItems, setMyItems] = useState([]);
+  const [loading, setLoading] = useState(false);
+  useEffect(() => {
+    if (user) {
+      setLoading(true);
+      fetch(`${API_BASE}/items/?seller_email=${encodeURIComponent(user.email)}`, {
+        headers: { Authorization: 'Bearer ' + getToken() }
+      })
+        .then(r => r.json())
+        .then(res => setMyItems(res.items || []))
+        .catch(() => setMyItems([]))
+        .finally(() => setLoading(false));
+    } else {
+      setMyItems([]);
+    }
+  }, [user]);
+  // 下架後即時前端移除該商品
+  async function handleDelete(id) {
+    if (!window.confirm("確定要下架/刪除這個商品嗎？")) return;
+    try {
+      await deleteItem(id);
+      setMyItems(mys => mys.filter(it => it.id !== id));
+      alert("已下架！");
+    } catch {
+      alert("下架失敗");
+    }
+  }
+  if (!user) return null;
+  return (
+    <div className="card">
+      <div className="font-semibold">我上架的商品 ({myItems.length})</div>
+      {loading ? (
+        <div>載入中...</div>
+      ) : myItems.length === 0 ? (
+        <div className="text-xs text-gray-500">尚未上架商品</div>
+      ) : (
+        <div className="mt-2 space-y-2 text-sm">
+          {myItems.map(item => (
+            <div key={item.id} className="flex items-center gap-2 border-b py-2">
+              <div className="w-12 h-12 bg-gray-100 overflow-hidden">
+                {item.images && item.images[0]
+                  ? <img src={fixImageUrl(item.images[0])} className="w-full h-full object-cover" />
+                  : <div className="text-xs text-gray-400 p-2">無圖</div>}
+              </div>
+              <div className="flex-1">
+                <div className="font-medium">{item.name}</div>
+                <div className="text-xs text-gray-500">NT$ {item.price}</div>
+                <div className="text-xs text-gray-400">{item.status}</div>
+              </div>
+              <button
+                className="px-2 py-1 bg-red-500 text-white rounded text-xs"
+                onClick={() => handleDelete(item.id)}
+              >下架</button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* AuthPanel: 登入 / 註冊 / 顯示個人資料 */
+function AuthPanel(){
+  const { user, login, register, updateProfile } = useApp();
+  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [email, setEmail] = useState('');
+  const [password, setPwd] = useState('');
+  const [pwd2, setPwd2] = useState('');
+  const [msg, setMsg] = useState('');
+  const [editing, setEditing] = useState(false);
+  const [profile, setProfile] = useState({ nickname:'', contact:'', grade:'', department:'' });
+
+  useEffect(()=> {
+    if(user){
+      setProfile({ nickname: user.nickname || '', contact: user.contact || '', grade: user.grade || '', department: user.department || '' });
+      setEditing(false);
+    }
+  }, [user]);
+
+ async function doRegister() {
+  setMsg("");
+
+  if(!email || !password || !pwd2){ setMsg('請填寫所有欄位'); return; }
+  if(password !== pwd2){ setMsg('兩次密碼不一致'); return; }
+
+  try {
+    const res = await fetch("http://127.0.0.1:5000/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },      
+      body: JSON.stringify({ email, password })
+    });
+
+    const text = await res.text();
+    
+    let data;
+    if (text) {
+      try {
+        data = JSON.parse(text);
+      } 
+      catch (parseErr) {
+        // 如果伺服器回傳不是 JSON（例如 HTML 錯誤頁面），我們記錄原始內容以便偵錯
+        console.error("伺服器回傳非 JSON：", text);
+        data = { message: text };
+      }
+    } 
+    else {
+      alert('登入失敗:查無登入者，請檢察帳號或密碼')
+      data = {}; // 空 body
+    }
+    if (data.message) setMsg(data.message);
+
+    if (!res.ok) {
+      setMsg(data.message || "註冊失敗");
+      return;
+    }
+
+    // 註冊成功
+    setMsg("註冊成功！自動登入中…");
+
+    // 自動登入（呼叫登入 API）
+    await doLogin();
+
+  } catch (err) {
+    setMsg("連線錯誤，請稍後再試"+err);
+  }
+}
+
+
+  async function doLogin(){
+    setMsg('');
+    if(!email || !password){ setMsg('請輸入 email 與密碼'); return; }
+    try {
+      const res = await login(email, password);
+      
+      setMsg('登入成功');
+     // user = res.access_token;
+      setEmail(''); setPwd('');
+    } catch(e){
+      console.log('doLogin exception:'+ e );
+      setMsg(e.payload?.message || JSON.stringify(e.payload) || '登入失敗');
+    }
+  }
+
+  async function saveProfile(){
+    try {
+      await updateProfile(profile);
+      setMsg('已更新個人資料');
+      setEditing(false);
+    } catch(e){
+      setMsg('更新失敗');
+    }
+  }
+
+  if(user){
+    return (
+      <div className="card">
+        <div className="flex items-start justify-between">
+          <div>
+            <div className="font-semibold">個人資料</div>
+            <div className="text-xs text-gray-500">{user.email} {user.is_admin ? '（管理員）' : ''}</div>
+          </div>
+          <div>
+            <button className="px-2 py-1 bg-gray-100 rounded" onClick={() => setEditing(e => !e)}>{editing ? '取消' : '編輯'}</button>
+          </div>
+        </div>
+        {!editing ? (
+          <div className="mt-3 text-sm space-y-1">
+            <div>暱稱：{user.nickname || '-'}</div>
+            <div>年級：{user.grade || '-'}</div>
+            <div>科系：{user.department || '-'}</div>
+            <div>聯絡：{user.contact || '-'}</div>
+          </div>
+        ) : (
+          <div className="mt-3 space-y-2">
+            <input className="w-full border rounded p-2 text-sm" placeholder="暱稱" value={profile.nickname} onChange={e=>setProfile({...profile,nickname:e.target.value})} />
+            <input className="w-full border rounded p-2 text-sm" placeholder="聯絡方式" value={profile.contact} onChange={e=>setProfile({...profile,contact:e.target.value})} />
+            <div className="flex gap-2">
+              <input className="border rounded p-2 text-sm w-24" placeholder="年級" value={profile.grade} onChange={e=>setProfile({...profile,grade:e.target.value})} />
+              <input className="border rounded p-2 text-sm" placeholder="科系" value={profile.department} onChange={e=>setProfile({...profile,department:e.target.value})} />
+            </div>
+            <div className="flex justify-end">
+              <button className="px-3 py-1 bg-primary-600 text-white rounded" onClick={saveProfile}>儲存</button>
+            </div>
+          </div>
+        )}
+        {msg && <div className="mt-2 text-sm text-green-600">{msg}</div>}
+      </div>
+    )
+  }
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between">
+        <div className="font-semibold">{mode === 'login' ? '登入' : '註冊'}</div>
+        <div className="text-sm">
+          <button className={`px-2 py-1 rounded ${mode==='login' ? 'bg-primary-600 text-white' : 'bg-gray-100'}`} onClick={()=>{ setMode('login'); setMsg('') }}>登入</button>
+          <button className={`ml-2 px-2 py-1 rounded ${mode==='register' ? 'bg-primary-600 text-white' : 'bg-gray-100'}`} onClick={()=>{ setMode('register'); setMsg('') }}>註冊</button>
+        </div>
+      </div>
+
+      <div className="mt-3 space-y-2">
+        <input className="w-full border rounded p-2 text-sm" placeholder="學校信箱" value={email} onChange={e=>setEmail(e.target.value)} />
+        <input className="w-full border rounded p-2 text-sm" placeholder="密碼" type="password" value={password} onChange={e=>setPwd(e.target.value)} />
+        {mode === 'register' && <input className="w-full border rounded p-2 text-sm" placeholder="再次輸入密碼" type="password" value={pwd2} onChange={e=>setPwd2(e.target.value)} />}
+        <div className="flex justify-between items-center">
+          <div className="text-xs text-gray-500">請使用學校信箱註冊</div>
+          <div className="flex gap-2">
+            <button id="authSubmitButton" className="px-3 py-1 bg-primary-600 text-white rounded" onClick={mode==='login' ? doLogin : doRegister}>
+              {mode==='login' ? '登入' : '註冊並登入'}
+            </button>
+          </div>
+        </div>
+        {msg && <div className="text-sm text-red-500">{msg}</div>}
+      </div>
+    </div>
+  )
+}
+
+/* Explorer: 搜尋與商品列表 */
+function Explorer(){
+  const { items, loadingItems, loadItems } = useApp();
+  const [q, setQ] = useState('');
+  const [category, setCategory] = useState('');
+  const [page, setPage] = useState(1);
+  const per_page = 10; //一頁筆數
+  const [total, setTotal] = useState(0); 
+  const totalPages = Math.ceil(total / per_page);
+
+  useEffect(() => {
+  async function run() {
+    console.log('useEffect 02')
+    const res = await loadItems({ page, per_page:per_page, name: q , category: category }); //第二次呼叫loadItems
+    if (res) setTotal(res.total);
+  }
+  run();
+}, [page]);
+
+ async function doSearch(){
+    console.log('q='+q);
+    console.log('category='+category);
+    setPage(1);
+    if(q || category) res = await loadItems({ page:1, per_page:per_page, name: q , category: category  });
+    else if(!q && !category)  res = await loadItems();  
+  }
+
+  return (
+    <div>
+      <div className="card mb-3">
+        <div className="flex gap-2">
+          <input className="flex-1 border rounded p-2" placeholder="搜尋商品名稱或描述" value={q} onChange={e=>setQ(e.target.value)} />          
+          <select className="flex-1 border rounded p-2" value={category} onChange={e=>setCategory(e.target.value)}>
+            <option>全部商品</option>
+            <option>書籍</option>
+            <option>文具</option>
+            <option>制服</option>
+            <option>生活用品</option>
+            <option>社團器材</option>
+            <option>電子用品</option>
+            <option>其他</option>
+          </select>
+          <button className="px-3 py-2 bg-primary-600 text-white rounded" onClick={doSearch}>搜尋</button>
+        </div>
+      </div>
+
+      <div className="space-y-3">
+        {loadingItems ? <div className="card">載入中...</div> : (
+          items.length === 0 ? <div className="card">目前沒有商品，試著上架或稍後再看</div> : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {items.map(it => <ItemCard key={it.id} item={it} />)}
+            </div>
+          )
+        )}
+      </div>
+
+      <div className="mt-4 flex justify-center items-center gap-2">
+        <button className="px-3 py-1 bg-gray-100 rounded" onClick={()=>setPage(p=>Math.max(1,p-1))}>上一頁</button>
+        <div className="px-3 py-1 card">第 {page}  / {totalPages} 頁</div>
+        <button className="px-3 py-1 bg-gray-100 rounded" onClick={()=>setPage(p=>Math.min(totalPages, p + 1))}>下一頁</button>
+      </div>
+    </div>
+  )
+}
+
+/* ItemCard 與 ItemDetail Modal */
+function ItemCard({item}){
+  const { user, addFavorite, removeFavorite, createTransaction, createReport } = useApp();
+  const [showDetail, setShowDetail] = useState(false);
+
+  async function doFavorite(){
+    if(!user){ alert('請先登入'); return; }
+    try{
+      const favs = await fetch(API_BASE + `/favorite/list/${encodeURIComponent(user.email)}`).then(r=>r.json());
+      const exists = favs.some(f => f.id === item.id);
+      if(!exists) await apiFetch(API_BASE + '/favorite/', { method: 'POST', body: JSON.stringify({ item_id: item.id }) });
+      else await apiFetch(API_BASE + '/favorite/', { method: 'DELETE', body: JSON.stringify({ item_id: item.id }) });
+      alert('更新收藏成功，請至「我的收藏」檢視');
+    }catch(e){
+      alert('更新收藏失敗');
+    }
+  }
+
+  return (
+    <>
+      <div className="card flex gap-3">
+        <div className="w-36">
+          <img className="thumb" src={item.images && item.images[0] ? fixImageUrl(item.images[0]) : ''} alt={item.name} />
+        </div>
+        <div className="flex-1">
+          <div className="flex justify-between">
+            <div>
+              <div className="font-semibold">{item.name}</div>
+              <div className="text-xs text-gray-500">{item.category} · {item.condition}</div>
+            </div>
+            <div className="text-right">
+              <div className="font-bold text-lg">NT$ {item.price}</div>
+              <div className="text-xs text-gray-400">{item.status}</div>
+            </div>
+          </div>
+          <div className="mt-2 text-sm text-gray-700 line-clamp-3">{item.description || '無描述'}</div>
+
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            <button className="px-3 py-1 bg-primary-600 text-white rounded" onClick={()=>setShowDetail(true)}>查看</button>
+            <button className="px-3 py-1 bg-gray-100 rounded" onClick={doFavorite}>收藏</button>
+            <button className="px-3 py-1 bg-green-100 rounded" onClick={async ()=> {
+              if(!user){ alert('請先登入'); return; }
+              try {
+                await apiFetch(API_BASE + '/transaction/', { method: 'POST', body: JSON.stringify({ item_id: item.id }) });
+                alert('交易已建立，請至交易紀錄查看');
+              } catch(e) {
+                alert(e.payload?.message || '建立交易失敗');
+              }
+            }}>我要購買</button>
+            <button className="px-2 py-1 bg-red-100 rounded text-xs" onClick={()=>{
+              const reason = prompt('請輸入檢舉理由：');
+              if(reason) {
+                apiFetch(API_BASE + '/admin/report', { method: 'POST', body: JSON.stringify({ target_type: 'item', target_id: item.id, reason }) })
+                  .then(()=>alert('檢舉已送出'))
+                  .catch(()=>alert('檢舉失敗'));
+              }
+            }}>檢舉</button>
+          </div>
+        </div>
+      </div>
+      {/* ★ Modal 在這裡 */}
+      {showDetail && <ItemDetailModal itemId={item.id} onClose={()=>setShowDetail(false)} />}
+    </>
+  )
+}
+
+function ItemDetailModal({itemId, onClose}){
+  const { getItem, user, createTransaction } = useApp();
+  const [item, setItem] = useState(null);
+  const [err, setErr] = useState('');
+
+  useEffect(()=>{
+    getItem(itemId).then(setItem).catch(e=> setErr(e.payload?.message || JSON.stringify(e.payload)));
+  },[itemId]);
+
+  if(err) return <div className="fixed inset-0 flex items-center justify-center z-50"><div className="card">{err} <button onClick={onClose} className="ml-2">關閉</button></div></div>;
+  if(!item) return <div className="fixed inset-0 flex items-center justify-center z-50"><div className="card">載入中...</div></div>;
+
+  return (
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
+      <div className="bg-white rounded-lg shadow-lg p-6 w-[900px] max-w-full relative">
+        <div className="flex justify-between items-start">
+          <h2 className="text-xl font-semibold">{item.name}</h2>
+          <div className="text-sm text-gray-500">{item.category} · {item.condition}</div>
+        </div>
+
+        <div className="mt-4 flex gap-4">
+          <div className="w-1/3 space-y-2 max-h-80 overflow-y-auto pr-2">
+              {item.images && item.images.length > 0 ? (
+                item.images.map((u, i) => (
+                  <img
+                    key={i}
+                    src={fixImageUrl(u)}
+                    className="w-full rounded"
+                    width="200"
+                    height="200"
+                  />
+                ))
+              ) : (
+                <div className="h-40 bg-gray-100 flex items-center justify-center">
+                  無圖片
+                </div>
+              )}
+          </div>
+          <div className="flex-1">
+            <div className="text-2xl font-bold">NT$ {item.price}</div>
+            <div className="mt-2 text-gray-700">{item.description || '無描述'}</div>
+            <div className="mt-3 text-sm text-gray-500">賣家：{item.seller_email}</div>
+           
+
+            <div className="mt-4 flex gap-2">
+              <button className="px-3 py-2 bg-primary-600 text-white rounded" onClick={async ()=>{
+                if(!user){ alert('請先登入'); return; }
+                try{
+                  const r = await createTransaction(item.id);
+                  alert(`交易已建立 (id=${r.transaction_id})`);
+                  onClose();
+                }catch(e){
+                  alert(e.payload?.message || '建立交易失敗');
+                }
+              }}>我要購買</button>
+              <button className="px-3 py-2 bg-gray-100 rounded" onClick={()=>{
+                navigator.clipboard?.writeText(item.seller_email || '').then(()=> alert('已複製賣家 Email'));
+              }}>複製賣家 Email</button>
+              <button className="px-3 py-2 bg-red-100 rounded" onClick={()=>{
+                const reason = prompt('告知檢舉理由（示範）:');
+                if(reason) apiFetch(API_BASE + '/admin/report', { method: 'POST', body: JSON.stringify({ target_type: 'item', target_id: item.id, reason }) }).then(()=>alert('已檢舉')).catch(()=>alert('檢舉失敗'));
+              }}>檢舉</button>
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-4 text-right">
+          <button className="px-3 py-1 bg-gray-200 rounded" onClick={onClose}>關閉</button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* 新增商品（上架） */
+function NewItemCard(){
+  const { user, uploadItem } = useApp();
+  const [name, setName] = useState('');
+  const [price, setPrice] = useState('');
+  const [category, setCategory] = useState('書籍');
+  const [cond, setCond] = useState('良好');
+  const [desc, setDesc] = useState('');
+  const [files, setFiles] = useState([]);
+  const [msg, setMsg] = useState('');
+
+  function onFiles(e){
+    const arr = Array.from(e.target.files || []).slice(0,5);
+    setFiles(arr);
+  }
+
+  async function submit(){
+    if(!user){ alert('請先登入'); return; }
+    if(!name || !price || !category){ setMsg('請填寫名稱、價格與分類'); return; }
+    setMsg('上傳中...');
+    try {
+      await uploadItem({ name, price: Number(price), category, description: desc, condition: cond, files });
+      setMsg('上架成功');
+      setName(''); setPrice(''); setDesc(''); setFiles([]);
+    } catch(e) {
+      setMsg(e.payload?.message || JSON.stringify(e.payload) || '上架失敗');
+    }
+  }
+
+  return (
+    <div className="card">
+      <div className="font-semibold">刊登商品</div>
+      <div className="mt-2 space-y-2 text-sm">
+        <input className="w-full border rounded p-2" placeholder="商品名稱" value={name} onChange={e=>setName(e.target.value)} />
+        <div className="flex gap-2">
+          <input className="border rounded p-2 w-32" placeholder="價格" type="number" min="0" step="50" value={price} onChange={e=>setPrice(e.target.value)} />
+          <select className="flex-1 border rounded p-2" value={category} onChange={e=>setCategory(e.target.value)}>
+            <option>書籍</option>
+            <option>文具</option>
+            <option>制服</option>
+            <option>生活用品</option>
+            <option>社團器材</option>
+            <option>電子用品</option>
+            <option>其他</option>
+          </select>
+        </div>
+        <select className="w-full border rounded p-2 text-sm" value={cond} onChange={e=>setCond(e.target.value)}>
+          <option>如新</option>
+          <option>九成新</option>
+          <option>良好</option>
+          <option>可修復</option>
+        </select>
+        <textarea className="w-full border rounded p-2" rows="3" placeholder="描述" value={desc} onChange={e=>setDesc(e.target.value)}></textarea>
+       <div>
+  <input
+    type="file"
+    multiple
+    accept="image/*"
+    onChange={(e) => {
+      const selected = Array.from(e.target.files || []);
+
+      setFiles(prev => {
+        // 目前已有的檔案數量
+        const currentCount = prev.length;
+
+        // 只允許最多 5 張
+        const allowed = 5 - currentCount;
+
+        if (allowed <= 0) {
+          alert("最多只能上傳 5 張圖片");
+          return prev;
+        }
+
+        // 如果選的檔案超出上限，只取前 allowed 張
+        const toAdd = selected.slice(0, allowed);
+
+        return [...prev, ...toAdd];
+      });
+
+      // 清掉 input 否則同檔案不能重選
+      e.target.value = "";
+    }}
+  />
+
+  <div className="text-xs text-gray-500">
+    最多 5 張。
+  </div>
+
+  <div className="mt-2 flex gap-2 flex-wrap">
+    {files.map((f, i) => (
+      <div
+        key={i}
+        className="relative w-20 h-20 bg-gray-100 rounded overflow-hidden"
+      >
+        {/* 刪除按鈕 */}
+        <button
+          type="button"
+          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+          onClick={() => {
+            setFiles(prev => prev.filter((_, index) => index !== i));
+          }}
+        >
+          ×
+        </button>
+
+        {/* 圖片預覽 */}
+        <img
+          src={URL.createObjectURL(f)}
+          className="w-full h-full object-cover"
+          alt=""
+        />
+      </div>
+    ))}
+  </div>
+</div>
+        <div className="flex justify-between items-center">
+          <div className="text-sm text-green-600">{msg}</div>
+          <div className="flex gap-2">
+            <button className="px-3 py-1 bg-primary-600 text-white rounded" onClick={submit}>上架商品</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+/* 我的概覽：收藏、交易、管理檢舉（給管理員） */
+function MyOverview(){
+  const { user, getFavorites, getTransactionsFor, getReports, adminDeleteItem } = useApp();
+  const [favs, setFavs] = useState([]);
+  const [txs, setTxs] = useState([]);
+  const [reports, setReports] = useState([]);
+  const [showItemModal, setShowItemModal] = useState(null); 
+
+  useEffect(()=>{
+    if(user) {
+      getFavorites(user.email).then(setFavs).catch(()=>setFavs([]));
+      getTransactionsFor(user.email).then(setTxs).catch(()=>setTxs([]));
+      if(user.is_admin) getReports().then(setReports).catch(()=>setReports([]));
+    } else {
+      setFavs([]); setTxs([]); setReports([]);
+    }
+  }, [user]);
+
+  if(!user) return null;
+
+  return (   
+    <div className="space-y-3">
+      <div className="card">
+        <div className="flex justify-between items-center">
+          <div className="font-semibold">我的收藏 ({favs.length})</div>
+        </div>
+        <div className="mt-2 text-sm">
+          {favs.slice(0,3).map(i => <div key={i.id} className="flex items-center gap-2 border-b py-2border p-2 rounded cursor-pointer hover:bg-gray-50" onClick={() => setShowItemModal(i.id)}>
+            <div className="w-12 h-12 bg-gray-100 overflow-hidden">{i.images && i.images[0] ? <img src={fixImageUrl(i.images[0])} className="w-full h-full object-cover" /> : <div className="text-xs text-gray-400 p-2">無圖</div>}</div>
+            <div className="flex-1">
+              <div className="font-medium text-sm">{i.name}</div>
+              <div className="text-xs text-gray-500"> NT$ {i.price}</div>
+            </div>
+             {/* 取消收藏按鈕 */} <button
+      className="text-red-500 text-xs hover:underline"
+      onClick={async (e) => {
+        e.stopPropagation();
+        await apiFetch(API_BASE + '/favorite/', {
+          method: 'DELETE',
+          body: JSON.stringify({ item_id: i.id })
+        });
+        alert("已取消收藏");
+      }}
+    >
+      取消
+    </button>
+   
+          </div>)}
+          {favs.length === 0 && <div className="text-xs text-gray-500">尚無收藏</div>}
+        </div>
+      </div>
+
+   <div className="card">
+        <div className="font-semibold">交易紀錄 ({txs.length})</div>
+        <div className="mt-2 text-sm space-y-2">
+          {txs.slice(0,4).map(t => <div key={t.id} className="border p-2 rounded cursor-pointer hover:bg-gray-50" onClick={() => setShowItemModal(t.item_id)}>
+            <div className="flex justify-between"><div>交易 #{t.id}</div><div className="text-xs text-gray-500">{t.created_at ? new Date(t.created_at).toLocaleString() : ''}</div></div>
+            <div className="text-xs">商品：{t.item_name} · 狀態：{t.status}</div>
+          </div>)}
+          {txs.length===0 && <div className="text-xs text-gray-500">尚無交易</div>}
+        </div>
+    </div>
+
+   
+      {/* ★ Modal 在這裡 */}
+      {showItemModal && ( <ItemDetailModal itemId={showItemModal} onClose={() => setShowItemModal(null)}/> )}
+
+      {user.is_admin && (
+        <div className="card">
+          <div className="flex justify-between items-center">
+            <div className="font-semibold">管理員：檢舉列表 ({reports.length})</div>
+          </div>
+          <div className="mt-2 space-y-2 text-sm">
+            {reports.map(r => (
+              <div key={r.id} className="border p-2 rounded">
+                <div className="font-medium">#{r.id} 目標：{r.target_type} {r.target_id}</div>
+                <div className="text-xs text-gray-500">檢舉人：{r.reporter_email} • {r.created_at}</div>
+                <div className="mt-1">{r.reason}</div>
+                <div className="mt-2 flex gap-2">
+                  <button className="px-2 py-1 bg-red-500 text-white rounded" onClick={()=>{
+                    if(confirm('確認刪除此商品（管理員操作）？')) {
+                      adminDeleteItem(r.target_id).then(()=>{ alert('已刪除'); setReports(rs => rs.filter(x=>x.id!==r.id)) }).catch(()=>alert('刪除失敗'));
+                    }
+                  }}>刪除商品</button>
+                </div>
+              </div>
+            ))}
+            {reports.length === 0 && <div className="text-xs text-gray-500">目前沒有檢舉</div>}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+/* ========== Render ========== */
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+
+</script>
+</body>
+</html>

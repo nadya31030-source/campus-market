@@ -1,0 +1,137 @@
+@baseUrl = http://localhost:5000
+
+###########################################################
+### 1. 註冊 Register
+###########################################################
+POST {{baseUrl}}/auth/register
+Content-Type: application/json
+
+{
+  "email": "test6@school.edu.tw",
+  "password": "123456",
+  "nickname": "測試用戶"
+}
+
+###########################################################
+### 2. 登入 Login
+### 把回傳的 access_token 貼到最下面的 {{token}}
+###########################################################
+POST {{baseUrl}}/auth/login
+Content-Type: application/json
+
+{
+  "email": "test6@school.edu.tw",
+  "password": "123456"
+}
+
+###########################################################
+### 🔑 在這裡貼上你登入得到的 access_token
+###########################################################
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJmcmVzaCI6ZmFsc2UsImlhdCI6MTc2MzQ4Nzg5MSwianRpIjoiNGEzZmU5ZjktMGUzMC00YzM0LWIxZmItOWQ2ZTMwYmYyMGVhIiwidHlwZSI6ImFjY2VzcyIsInN1YiI6InRlc3Q1QHNjaG9vbC5lZHUudHciLCJuYmYiOjE3NjM0ODc4OTEsImNzcmYiOiI0M2Y3MWY2Ni1jNTQ4LTRlYWItYmM2Ni04ZDE3MjUyNjE2MWYiLCJleHAiOjE3NjQwOTI2OTF9.S2-9pmjSgf7WlrAaXxTMmXwJmWtoclRGZfK_YzX94as
+
+###########################################################
+### 3. 新增商品（無圖片）
+###########################################################
+POST {{baseUrl}}/items/upload
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "name": "測試商品",
+  "price": 100,
+  "category": "其他",
+  "description": "這是一個測試商品"
+}
+
+###########################################################
+### 4. 新增商品（含圖片 multipart/form-data）
+### 要測圖片請準備一張 test.jpg 放在同一資料夾
+###########################################################
+POST {{baseUrl}}/items/upload
+Authorization: Bearer {{token}}
+Content-Type: multipart/form-data; boundary=MyBoundary
+
+--MyBoundary
+Content-Disposition: form-data; name="name"
+
+測試商品圖片
+--MyBoundary
+Content-Disposition: form-data; name="price"
+
+120
+--MyBoundary
+Content-Disposition: form-data; name="category"
+
+其他
+--MyBoundary
+Content-Disposition: form-data; name="description"
+
+這是第二個測試商品
+--MyBoundary
+Content-Disposition: form-data; name="images"; filename="test.jpg"
+Content-Type: image/jpeg
+
+< ./test.jpg
+--MyBoundary--
+
+###########################################################
+### 5. 查看所有商品
+###########################################################
+GET {{baseUrl}}/items/all
+Authorization: Bearer {{token}}
+
+###########################################################
+### 6. 收藏商品
+###########################################################
+POST {{baseUrl}}/favorite/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "item_id": 1
+}
+
+###########################################################
+### 7. 新增評價
+###########################################################
+POST {{baseUrl}}/review/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "target_email": "seller@school.edu.tw",
+  "rating": 5,
+  "comment": "很棒的賣家！"
+}
+
+###########################################################
+### 8. 建立交易
+###########################################################
+POST {{baseUrl}}/transaction/
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "item_id": 1,
+  "seller_email": "seller@school.edu.tw"
+}
+
+
+
+###########################################################
+### 9. 檢舉商品
+###########################################################
+POST {{baseUrl}}/report
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{
+  "target_id": 1,
+  "reason": "不符合規定"
+}
+
+###########################################################
+### 10. 管理員 — 查看所有檢舉（Admin Only）
+###########################################################
+GET {{baseUrl}}/admin/reports
+Authorization: Bearer {{token}}
