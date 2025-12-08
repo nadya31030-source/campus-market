@@ -4,7 +4,7 @@ import io
 from datetime import timedelta
 from PIL import Image
 
-from flask import Flask, request, jsonify, current_app, send_from_directory, Blueprint
+from flask import Flask, request, jsonify, current_app, send_from_directory, Blueprint, render_template
 from flask_sqlalchemy import SQLAlchemy
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
@@ -847,17 +847,15 @@ def create_app(test_config=None):
     db_url = os.getenv("DATABASE_URL")
 
     if db_url:
-        # Render 的 DATABASE_URL 可能以 "postgres://" 開頭，需要替換
+        # Render DATABASE_URL 可能用 "postgres://" 開頭，要改成 "postgresql://"
         db_url = db_url.replace("postgres://", "postgresql://", 1)
         app.config["SQLALCHEMY_DATABASE_URI"] = db_url
     else:
-        # 本地開發環境（用 SQLite，不用 MySQL，比較簡單）
+        # 本地開發環境用 SQLite
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/local.db"
 
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv("DATABASE_URL",
-    "postgresql+psycopg2://campus_market_user:ULluFgOA2E3IX8dAfSEWxurEzqggafiO@dpg-d4oq4lbe5dus73cf3pr0-a/campus_market@dpg-d4oq4lbe5dus73cf3pf0-a/campus_market")
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB
 
@@ -891,13 +889,12 @@ def create_app(test_config=None):
         else:
             current_app.logger.exception(e)
             return jsonify({"error": "伺服器發生錯誤"}), 500
-
     @app.route('/', defaults={'path': ''})
     @app.route('/<path:path>')
     def serve_frontend(path):
         if path.startswith("static/") or path.startswith("api/") or path.startswith("auth/"):
             return jsonify({"message": "Invalid path"}), 404
-        return jsonify({"message": "後端運作正常，請從前端啟動 React App"}), 200
+        return render_template('index.html')
 
     with app.app_context():
         db.create_all()
