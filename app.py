@@ -889,12 +889,13 @@ def create_app(test_config=None):
         else:
             current_app.logger.exception(e)
             return jsonify({"error": "伺服器發生錯誤"}), 500
-    @app.route('/', defaults={'path': ''})
-    @app.route('/<path:path>')
-    def serve_frontend(path):
-        if path.startswith("static/") or path.startswith("api/") or path.startswith("auth/"):
-            return jsonify({"message": "Invalid path"}), 404
-        return render_template('index.html')
+    @app.route("/", defaults={"path": ""})
+    @app.route("/<path:path>")
+    def catch_all(path):
+        if path.startswith(("auth/", "items/", "uploads/", "api/", "fav/", "review/", "tx/", "admin/")):
+            return jsonify({"error": "Not found"}), 404
+
+    return render_template("index.html")
 
     with app.app_context():
         db.create_all()
