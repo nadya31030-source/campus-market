@@ -43,7 +43,7 @@
 
 <script type="text/babel">
 const { useState, useEffect, useMemo, createContext, useContext } = React;
-const API_BASE = "https://campus-market-py.onrender.com";
+const API_BASE = "https://campus-market-web.onrender.com/";
 
 function getToken(){ return localStorage.getItem('cm_token') || null }
 function setToken(t){ if(t) localStorage.setItem('cm_token', t); else localStorage.removeItem('cm_token') }
