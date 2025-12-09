@@ -306,7 +306,7 @@ function AuthPanel(){
   if(password !== pwd2){ setMsg('兩次密碼不一致'); return; }
 
   try {
-    const res = await fetch("http://127.0.0.1:5000/auth/register", {
+    const res = await fetch("https://campus-market-web.onrender.com/auth/register", {
       method: "POST",
       headers: { "Content-Type": "application/json" },      
       body: JSON.stringify({ email, password })
