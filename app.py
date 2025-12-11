@@ -841,7 +841,9 @@ def uploads_route(app):
 # ---------- Application Factory ----------
 def create_app(test_config=None):
     app = Flask(__name__)
-    CORS(app, resources={r"/*": {"origins": "https://campus-market-static-github-io.onrender.com"}})
+    CORS(app,
+         supports_credentials=True,
+         resources={r"/*": {"origins": "https://campus-market-static-github-io.onrender.com"}})
     app.config['JSON_AS_ASCII'] = False
 
     # Render 的 PostgreSQL 連線字串會是 DATABASE_URL
