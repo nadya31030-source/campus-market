@@ -845,7 +845,7 @@ def create_app(test_config=None):
     app.config['JSON_AS_ASCII'] = False
 
     # Render 的 PostgreSQL 連線字串會是 DATABASE_URL
-    db_url = os.getenv("DATABASE_URL")
+    db_url = "postgresql://campus_market_user:ULluFgOA2E3IX8dAfSEWxurEzqggafiO@dpg-d4oq4lbe5dus73cf3pr0-a/campus_market"#os.getenv("DATABASE_URL")
 
     if db_url:
         # Render DATABASE_URL 可能用 "postgres://" 開頭，要改成 "postgresql://"
