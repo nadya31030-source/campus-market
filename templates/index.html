@@ -43,7 +43,7 @@
 
 <script type="text/babel">
 const { useState, useEffect, useMemo, createContext, useContext } = React;
-const API_BASE = "https://campus-market-web.onrender.com/";
+const API_BASE = "https://campus-market-web.onrender.com";
 
 function getToken(){ return localStorage.getItem('cm_token') || null }
 function setToken(t){ if(t) localStorage.setItem('cm_token', t); else localStorage.removeItem('cm_token') }
@@ -113,7 +113,7 @@ function AppProvider({children}) {
     return data;
   }
   async function login(email, password){      
-    const res = await apiFetch(API_BASE + '/auth/login', {
+    const res = await apiFetch('https://campus-market-web.onrender.com/auth/login', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
