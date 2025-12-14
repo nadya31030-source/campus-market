@@ -80,7 +80,9 @@ function AppProvider({children}) {
     const t = getToken();
     if(!t){ setUser(null); return; }
     try {
-      const res = await apiFetch(API_BASE + '/user/profile', { method: 'GET' });
+     
+      const res = await fetch('https://campus-market-web.onrender.com//user/profile', { method: 'GET' });
+      //const res = await fetch(API_BASE + '/user/profile', { method: 'GET' });
       setUser(res);
     } catch(e){
       setToken(null);
@@ -112,8 +114,10 @@ function AppProvider({children}) {
     if (!res.ok) { throw new Error(data.message || "註冊失敗"); }
     return data;
   }
+  
+
   async function login(email, password){      
-    const res = await apiFetch('https://campus-market-web.onrender.com/auth/login', {
+    const res = await fetch('https://campus-market-web.onrender.com/auth/login', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
