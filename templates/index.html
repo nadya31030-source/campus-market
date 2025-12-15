@@ -55,6 +55,7 @@ async function apiFetch(path, opts = {}) {
   }
   
   const token = getToken();
+  console.log('apiFetch, token='+ token);
   if (token) headers['Authorization'] = 'Bearer ' + token;  
 
   const url = path.startsWith('http') ? path : API_BASE + path;
@@ -80,6 +81,7 @@ function AppProvider({children}) {
 
   async function loadProfile(){
     const t = getToken();
+    console.log('loadProfile, token='+ t);
     if(!t){ setUser(null); return; }
     try {
      

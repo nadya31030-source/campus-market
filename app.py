@@ -841,9 +841,10 @@ def uploads_route(app):
 # ---------- Application Factory ----------
 def create_app(test_config=None):
     app = Flask(__name__)
-    CORS(app,
-         supports_credentials=True,
-         resources={r"/*": {"origins": "https://campus-market-static-github-io.onrender.com"}})
+   # 2025-06-12 修改 CORS 設定，開放所有來源 
+   # CORS(app,
+   #      supports_credentials=True,
+   #      resources={r"/*": {"origins": "https://campus-market-static-github-io.onrender.com"}})
     app.config['JSON_AS_ASCII'] = False
 
     # Render 的 PostgreSQL 連線字串會是 DATABASE_URL
@@ -869,11 +870,11 @@ def create_app(test_config=None):
     jwt.init_app(app)
 
     # 統一 CORS 設定：允許前端傳 Authorization header 與多種 HTTP method
-    CORS(app, resources={r"/*": {"origins": "*"}},
+    CORS(app, resources={r"/*": {"origins": "https://campus-market-static-github-io.onrender.com"}},
          supports_credentials=True,
          allow_headers=["Content-Type", "Authorization", "Access-Control-Allow-Credentials"],
          methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
-
+    
     # register blueprints
     app.register_blueprint(auth_bp)
     app.register_blueprint(user_bp)
