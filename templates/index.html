@@ -53,8 +53,10 @@ async function apiFetch(path, opts = {}) {
   if (opts.body !== undefined && !(opts.body instanceof FormData)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
+  
   const token = getToken();
-  if (token) headers['Authorization'] = 'Bearer ' + token;
+  if (token) headers['Authorization'] = 'Bearer ' + token;  
+
   const url = path.startsWith('http') ? path : API_BASE + path;
   const res = await fetch(url, { ...opts, headers, credentials: 'include' });
   const text = await res.text();
@@ -81,10 +83,11 @@ function AppProvider({children}) {
     if(!t){ setUser(null); return; }
     try {
      
-      const res = await fetch('https://campus-market-web.onrender.com//user/profile', { method: 'GET' });
-      //const res = await fetch(API_BASE + '/user/profile', { method: 'GET' });
+      //const res = await fetch('https://campus-market-web.onrender.com//user/profile', { method: 'GET' });
+      const res = await fetch(API_BASE + '/user/profile', { method: 'GET' });
       setUser(res);
     } catch(e){
+      console.log('loadProfile exception:'+ e );
       setToken(null);
       setUser(null);
     }
@@ -122,6 +125,7 @@ function AppProvider({children}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
     if(res && res.access_token){
+      console.log('login success, token='+ res.access_token);
       setToken(res.access_token);
       await loadProfile();
     }
