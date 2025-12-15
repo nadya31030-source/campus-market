@@ -227,7 +227,12 @@ def login():
         return jsonify({"message": "帳號或密碼錯誤"}), 401
     if not user.is_verified:
         return jsonify({"message": "請先驗證 email"}), 403
-    access_token = create_access_token(identity=user.email, expires_delta=timedelta(days=7))
+    
+    try:
+        access_token = create_access_token(identity=user.email, expires_delta=timedelta(days=7))
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    
     return jsonify({"access_token": access_token, "is_admin": user.is_admin}), 200
 
 @auth_bp.route('/logout', methods=['POST'])
@@ -546,30 +551,6 @@ def delete_item(item_id):
     db.session.commit()
     return jsonify({"message": "商品已刪除"}), 200
 
-# ----- 540 用seller_email找尋刊登商品 ---
-'''
-@items_bp.route('/<seller_email>', methods=['GET'])
-def get_mysells(user_email):
-    print('api def get_mysells')  
-    sellers = Item.query.filter_by(seller_email=user_email).all()
-    result = []
-    for f in sellers:
-            trans =  Transaction.query.filter_by(item_id=f.item_id).all()
-            buyer_emails =[s.buyer_email for s in trans]
-
-            images = ItemImage.query.filter_by(item_id=f.item_id).order_by(ItemImage.order.asc()).all()
-            image_urls = [img.image_url for img in images]
-            result.append({
-                "id": f.item_id,
-                "name": f.name,
-                "price": f.price,
-                "description": f.description,
-                "condition": f.condition,
-                "images": image_urls,
-                "buyer_email": buyer_emails
-            })
-    return jsonify(result), 200
-'''
 
 # ---- Favorites ----
 @fav_bp.route('/', methods=['POST'])
@@ -859,6 +840,8 @@ def create_app(test_config=None):
         app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///instance/local.db"
 
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    app.config["JWT_SECRET_KEY"] = "dev_secret"
 
     app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
     app.config['MAX_CONTENT_LENGTH'] = 8 * 1024 * 1024  # 8 MB

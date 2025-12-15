@@ -126,12 +126,13 @@ function AppProvider({children}) {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
-    if(res && res.access_token){
-      console.log('login success, token='+ res.access_token);
-      setToken(res.access_token);
+      const data = await res.json();   // 這個才是你的 token 回傳物件
+    if(res && data.access_token){
+      console.log('login success, token='+ data.access_token);
+      setToken(data.access_token);
       await loadProfile();
     }
-    return res;
+    return data;
   }
   function logout(){
     apiFetch(API_BASE + '/auth/logout', { method: 'POST' }).catch(()=>{});
