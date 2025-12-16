@@ -122,12 +122,12 @@ function AppProvider({children}) {
   
 
   async function login(email, password){      
-    //const res = await fetch('https://campus-market-web.onrender.com/auth/login', {  
-      const res = await apiFetch(API_BASE + '/auth/login', {
+    const res = await fetch('https://campus-market-web.onrender.com/auth/login', {  
+      //const res = await apiFetch(API_BASE + '/auth/login', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
-      
+
       const data = await res.json();   // 這個才是你的 token 回傳物件
     if(res && data.access_token){
       console.log('login success');
@@ -142,6 +142,7 @@ function AppProvider({children}) {
     setUser(null);
   }
   async function updateProfile(patch){
+    console.log('updateProfile', patch);
     await apiFetch(API_BASE + '/user/profile', { method: 'PUT', body: JSON.stringify(patch) });
     await loadProfile();
   }
