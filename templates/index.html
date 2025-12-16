@@ -81,12 +81,12 @@ function AppProvider({children}) {
 
   async function loadProfile(){
     const t = getToken();
-    console.log('loadProfile, token='+ t);
+    console.log('loadProfile');
     if(!t){ setUser(null); return; }
     try {
      
       //const res = await fetch('https://campus-market-web.onrender.com//user/profile', { method: 'GET' });
-      const res = await fetch(API_BASE + '/user/profile', { method: 'GET' });
+      const res = await apiFetch(API_BASE + '/user/profile', { method: 'GET' });
       setUser(res);
     } catch(e){
       console.log('loadProfile exception:'+ e );
@@ -122,13 +122,15 @@ function AppProvider({children}) {
   
 
   async function login(email, password){      
-    const res = await fetch('https://campus-market-web.onrender.com/auth/login', {
+    //const res = await fetch('https://campus-market-web.onrender.com/auth/login', {  
+      const res = await apiFetch(API_BASE + '/auth/login', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
+      
       const data = await res.json();   // 這個才是你的 token 回傳物件
     if(res && data.access_token){
-      console.log('login success, token='+ data.access_token);
+      console.log('login success');
       setToken(data.access_token);
       await loadProfile();
     }
@@ -586,6 +588,7 @@ function ItemDetailModal({itemId, onClose}){
   const [err, setErr] = useState('');
 
   useEffect(()=>{
+    console.log('useEffect 01')
     getItem(itemId).then(setItem).catch(e=> setErr(e.payload?.message || JSON.stringify(e.payload)));
   },[itemId]);
 
@@ -798,7 +801,9 @@ function MyOverview(){
     }
   }, [user]);
 
-  if(!user) return null;
+  if(!user){
+    return null;
+  } 
 
   return (   
     <div className="space-y-3">
