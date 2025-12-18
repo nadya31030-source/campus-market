@@ -393,8 +393,8 @@ def upload_item():
 def list_items():
     print('收到 /items')  
     page = request.args.get("page", default=1, type=int)
-    per_page = request.args.get("per_page", default=20, type=int)
-    #print(f'page={page}')
+    per_page = request.args.get("per_page", default=8, type=int)
+    #print(f'page={totalPages}')
     #print(f'per_page={per_page}')
     if per_page > 100:
         per_page = 100
@@ -760,7 +760,8 @@ def admin_get_reports():
         return jsonify({"message": "找不到使用者"}), 404
     if not require_admin(current_user):
         return jsonify({"message": "需管理員權限"}), 403
-    reports = Report.query.order_by(Report.created_at.desc()).all()
+    #reports = Report.query.order_by(Report.created_at.desc()).all()
+    reports = Report.query.filter(Report.status != '已處理').order_by(Report.created_at.desc()).all()
     return jsonify([{
         "id": r.id,
         "reporter_email": r.reporter_email,

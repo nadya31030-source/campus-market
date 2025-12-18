@@ -128,12 +128,22 @@ function AppProvider({children}) {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
 
-      const data = await res.json();   // 這個才是你的 token 回傳物件
-    if(res && data.access_token){
+      //const data = await res.json();   // 這個才是你的 token 回傳物件
+
+      var data;
+      try {
+        data = await res.json();
+      } 
+      catch {
+        data = {};
+      }
+    if (!res.ok) { throw { status: res.status, payload: data }; }
+    if (!data.access_token) { throw { payload: { message: '沒有回傳 token' } };  }
+    //if(res && data.access_token){
       console.log('login success');
       setToken(data.access_token);
       await loadProfile();
-    }
+    //}
     return data;
   }
   function logout(){
@@ -172,6 +182,12 @@ function AppProvider({children}) {
   async function createReport(target_type, target_id, reason){ return apiFetch(API_BASE + '/admin/report', { method: 'POST', body: JSON.stringify({ target_type, target_id, reason }) }) }
   async function getReports(){ return apiFetch(API_BASE + '/admin/reports', { method: 'GET' }) }
   async function adminDeleteItem(id){ return apiFetch(`/admin/item/${id}`, { method: 'DELETE' }) }
+
+  async function adminMarkReportHandled(reportId){  return apiFetch(`/admin/report/${reportId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ status: "已處理" })
+  });
+}
   return (
     <AppCtx.Provider value={{
       user, items, loadingItems,
@@ -180,7 +196,7 @@ function AppProvider({children}) {
       uploadItem, getItem, deleteItem, updateItem,
       addFavorite, removeFavorite, getFavorites,
       createTransaction, getTransactionsFor, updateTransactionStatus,
-      createReport, getReports, adminDeleteItem
+      createReport, getReports, adminDeleteItem ,adminMarkReportHandled
     }}>
       {children}
     </AppCtx.Provider>
@@ -256,9 +272,10 @@ function MyItemsCard() {
     try {
       await deleteItem(id);
       setMyItems(mys => mys.filter(it => it.id !== id));
+     
       alert("已下架！");
     } catch {
-      alert("下架失敗");
+      alert("下架失敗，請確認是否正在交易中或稍後再試");
     }
   }
   if (!user) return null;
@@ -867,7 +884,18 @@ function MyOverview(){
                 <div className="mt-2 flex gap-2">
                   <button className="px-2 py-1 bg-red-500 text-white rounded" onClick={()=>{
                     if(confirm('確認刪除此商品（管理員操作）？')) {
-                      adminDeleteItem(r.target_id).then(()=>{ alert('已刪除'); setReports(rs => rs.filter(x=>x.id!==r.id)) }).catch(()=>alert('刪除失敗'));
+                     // adminDeleteItem(r.target_id).then(()=>{ alert('已刪除'); setReports(rs => rs.filter(x=>x.id!==r.id)) }).catch(()=>alert('刪除失敗'));
+                      adminDeleteItem(r.target_id)
+                        .then(() => {
+                          alert('已刪除商品');
+                          // 標記檢舉為已處理
+                          return adminMarkReportHandled(r.id);
+                        })
+                        .then(() => {
+                          // 從列表中移除已處理的檢舉
+                          setReports(rs => rs.filter(x => x.id !== r.id));
+                        })
+                        .catch(() => alert('操作失敗'));
                     }
                   }}>刪除商品</button>
                 </div>
