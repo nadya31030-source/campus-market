@@ -174,7 +174,6 @@ function AppProvider({children}) {
     return apiFetch(`/items/${id}`, { method: 'PUT', body: isForm ? body : JSON.stringify(body) });
   }
   async function addFavorite(item_id){ await apiFetch(API_BASE + '/favorite/', { method: 'POST', body: JSON.stringify({ item_id }) }) }
-  async function removeFavorite(item_id){ await apiFetch(API_BASE + '/favorite/', { method: 'DELETE', body: JSON.stringify({ item_id }) }) }
   async function getFavorites(email){ return apiFetch(`/favorite/list/${encodeURIComponent(email)}`, { method: 'GET' }) }
   async function createTransaction(item_id){ return apiFetch(API_BASE + '/transaction/', { method: 'POST', body: JSON.stringify({ item_id }) }) }
   async function getTransactionsFor(email){ return apiFetch(`/transaction/list/${encodeURIComponent(email)}`, { method: 'GET' }) }
@@ -185,7 +184,7 @@ function AppProvider({children}) {
 
   async function adminMarkReportHandled(reportId){  return apiFetch(`/admin/report/${reportId}`, {
     method: "PATCH",
-    body: JSON.stringify({ status: "已處理" })
+    body: JSON.stringify({ "status": "已處理" })
   });
 }
   return (
@@ -803,7 +802,7 @@ function NewItemCard(){
 
 /* 我的概覽：收藏、交易、管理檢舉（給管理員） */
 function MyOverview(){
-  const { user, getFavorites, getTransactionsFor, getReports, adminDeleteItem } = useApp();
+  const { user, getFavorites, getTransactionsFor, getReports, adminDeleteItem,adminMarkReportHandled } = useApp();
   const [favs, setFavs] = useState([]);
   const [txs, setTxs] = useState([]);
   const [reports, setReports] = useState([]);
@@ -889,13 +888,15 @@ function MyOverview(){
                         .then(() => {
                           alert('已刪除商品');
                           // 標記檢舉為已處理
+                          console.log("report_id=" + r.id);
                           return adminMarkReportHandled(r.id);
                         })
                         .then(() => {
                           // 從列表中移除已處理的檢舉
                           setReports(rs => rs.filter(x => x.id !== r.id));
                         })
-                        .catch(() => alert('操作失敗'));
+                        .catch(() => alert(e.payload?.message || JSON.stringify(e.payload) || '操作失敗'));
+                       
                     }
                   }}>刪除商品</button>
                 </div>
