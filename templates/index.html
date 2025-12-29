@@ -11,8 +11,13 @@
   <style>
     body { background: linear-gradient(180deg,#f7fff8 0%,#ffffff 100%); }
     .app-max { max-width: 1100px; margin-left: auto; margin-right: auto; }
-    .card { background: white; border-radius: .5rem; box-shadow: 0 4px 10px rgba(2,6,23,0.04); padding: 1rem; }
+    .card { background: white; border-radius: .5rem; box-shadow: 0 4px 10px rgba(2,6,23,0.04); padding: 1rem; margin-bottom: 0.7rem; }
     .thumb { width:100%; height:160px; object-fit:cover; border-radius: .375rem; background:#f3f4f6 }
+    @media (max-width:600px){
+      .thumb { height: 90px !important; }
+      .app-max { padding: 0 !important; }
+      .card { padding: 0.8rem !important; }
+    }
   </style>
 <script>
   tailwind.config = {
@@ -38,9 +43,7 @@
 </script>
 </head>
 <body class="min-h-screen text-gray-900 p-4">
-
 <div id="root" class="app-max"></div>
-
 <script type="text/babel">
 const { useState, useEffect, useMemo, createContext, useContext } = React;
 const API_BASE = "https://campus-market-web.onrender.com";
@@ -53,11 +56,8 @@ async function apiFetch(path, opts = {}) {
   if (opts.body !== undefined && !(opts.body instanceof FormData)) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
-  
   const token = getToken();
-  console.log('apiFetch, token='+ token);
   if (token) headers['Authorization'] = 'Bearer ' + token;  
-
   const url = path.startsWith('http') ? path : API_BASE + path;
   const res = await fetch(url, { ...opts, headers, credentials: 'include' });
   const text = await res.text();
@@ -81,15 +81,11 @@ function AppProvider({children}) {
 
   async function loadProfile(){
     const t = getToken();
-    console.log('loadProfile');
     if(!t){ setUser(null); return; }
     try {
-     
-      //const res = await fetch('https://campus-market-web.onrender.com//user/profile', { method: 'GET' });
       const res = await apiFetch(API_BASE + '/user/profile', { method: 'GET' });
       setUser(res);
     } catch(e){
-      console.log('loadProfile exception:'+ e );
       setToken(null);
       setUser(null);
     }
@@ -120,16 +116,11 @@ function AppProvider({children}) {
     return data;
   }
   
-
   async function login(email, password){      
     const res = await fetch('https://campus-market-web.onrender.com/auth/login', {  
-      //const res = await apiFetch(API_BASE + '/auth/login', {
       method: 'POST',
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ email, password }) });
-
-      //const data = await res.json();   // 這個才是你的 token 回傳物件
-
       var data;
       try {
         data = await res.json();
@@ -139,11 +130,8 @@ function AppProvider({children}) {
       }
     if (!res.ok) { throw { status: res.status, payload: data }; }
     if (!data.access_token) { throw { payload: { message: '沒有回傳 token' } };  }
-    //if(res && data.access_token){
-      console.log('login success');
       setToken(data.access_token);
       await loadProfile();
-    //}
     return data;
   }
   function logout(){
@@ -152,7 +140,6 @@ function AppProvider({children}) {
     setUser(null);
   }
   async function updateProfile(patch){
-    console.log('updateProfile', patch);
     await apiFetch(API_BASE + '/user/profile', { method: 'PUT', body: JSON.stringify(patch) });
     await loadProfile();
   }
@@ -182,7 +169,6 @@ function AppProvider({children}) {
   async function createReport(target_type, target_id, reason){ return apiFetch(API_BASE + '/admin/report', { method: 'POST', body: JSON.stringify({ target_type, target_id, reason }) }) }
   async function getReports(){ return apiFetch(API_BASE + '/admin/reports', { method: 'GET' }) }
   async function adminDeleteItem(id){ return apiFetch(`/admin/item/${id}`, { method: 'DELETE' }) }
-
   async function adminMarkReportHandled(reportId){  return apiFetch(`/admin/report/${reportId}`, {
     method: "PATCH",
     body: JSON.stringify({ "status": "已處理" })
@@ -207,14 +193,14 @@ function App(){
     <AppProvider>
       <div className="card">
         <Header />
-        <main className="mt-4 grid grid-cols-1 lg:grid-cols-3 gap-4">
-          <section className="lg:col-span-2 space-y-4">
+        <main className="mt-4 flex flex-col lg:grid lg:grid-cols-3 gap-4">
+          <section className="space-y-4 lg:col-span-2">
             <Explorer />
           </section>
-          <aside className="space-y-4">
+          <aside className="space-y-4 mt-4 lg:mt-0">
             <AuthPanel />
             <NewItemCard />
-            <MyItemsCard /> {/* 新增我上架的商品清單與下架功能 */}
+            <MyItemsCard /> 
             <MyOverview />
           </aside>
         </main>
@@ -226,7 +212,7 @@ function App(){
 function Header(){
   const { user, logout } = useApp();
   return (
-    <header className="flex items-center justify-between">
+    <header className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-2">
       <div>
         <h1 className="text-2xl font-bold text-primary-700">校園二手交易平台</h1>
         <p className="text-sm text-gray-600">校內專用示範（不含金流）</p>
@@ -247,7 +233,6 @@ function Header(){
     </header>
   )
 }
-/* 新增：我上架的商品與下架功能 */
 function MyItemsCard() {
   const { user, deleteItem } = useApp();
   const [myItems, setMyItems] = useState([]);
@@ -266,13 +251,11 @@ function MyItemsCard() {
       setMyItems([]);
     }
   }, [user]);
-  // 下架後即時前端移除該商品
   async function handleDelete(id) {
     if (!window.confirm("確定要下架/刪除這個商品嗎？")) return;
     try {
       await deleteItem(id);
       setMyItems(mys => mys.filter(it => it.id !== id));
-     
       alert("已下架！");
     } catch {
       alert("下架失敗，請確認是否正在交易中或稍後再試");
@@ -312,10 +295,9 @@ function MyItemsCard() {
   );
 }
 
-/* AuthPanel: 登入 / 註冊 / 顯示個人資料 */
 function AuthPanel(){
   const { user, login, register, updateProfile } = useApp();
-  const [mode, setMode] = useState('login'); // 'login' | 'register'
+  const [mode, setMode] = useState('login');
   const [email, setEmail] = useState('');
   const [password, setPwd] = useState('');
   const [pwd2, setPwd2] = useState('');
@@ -344,21 +326,18 @@ function AuthPanel(){
     });
 
     const text = await res.text();
-    
     let data;
     if (text) {
       try {
         data = JSON.parse(text);
       } 
       catch (parseErr) {
-        // 如果伺服器回傳不是 JSON（例如 HTML 錯誤頁面），我們記錄原始內容以便偵錯
-        console.error("伺服器回傳非 JSON：", text);
         data = { message: text };
       }
     } 
     else {
       alert('登入失敗:查無登入者，請檢察帳號或密碼')
-      data = {}; // 空 body
+      data = {};
     }
     if (data.message) setMsg(data.message);
 
@@ -366,11 +345,7 @@ function AuthPanel(){
       setMsg(data.message || "註冊失敗");
       return;
     }
-
-    // 註冊成功
     setMsg("註冊成功！自動登入中…");
-
-    // 自動登入（呼叫登入 API）
     await doLogin();
 
   } catch (err) {
@@ -378,18 +353,14 @@ function AuthPanel(){
   }
 }
 
-
   async function doLogin(){
     setMsg('');
     if(!email || !password){ setMsg('請輸入 email 與密碼'); return; }
     try {
       const res = await login(email, password);
-      
       setMsg('登入成功');
-     // user = res.access_token;
       setEmail(''); setPwd('');
     } catch(e){
-      console.log('doLogin exception:'+ e );
       setMsg(e.payload?.message || JSON.stringify(e.payload) || '登入失敗');
     }
   }
@@ -455,7 +426,7 @@ function AuthPanel(){
         <input className="w-full border rounded p-2 text-sm" placeholder="學校信箱" value={email} onChange={e=>setEmail(e.target.value)} />
         <input className="w-full border rounded p-2 text-sm" placeholder="密碼" type="password" value={password} onChange={e=>setPwd(e.target.value)} />
         {mode === 'register' && <input className="w-full border rounded p-2 text-sm" placeholder="再次輸入密碼" type="password" value={pwd2} onChange={e=>setPwd2(e.target.value)} />}
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-center gap-2">
           <div className="text-xs text-gray-500">請使用學校信箱註冊</div>
           <div className="flex gap-2">
             <button id="authSubmitButton" className="px-3 py-1 bg-primary-600 text-white rounded" onClick={mode==='login' ? doLogin : doRegister}>
@@ -468,29 +439,24 @@ function AuthPanel(){
     </div>
   )
 }
-
-/* Explorer: 搜尋與商品列表 */
 function Explorer(){
   const { items, loadingItems, loadItems } = useApp();
   const [q, setQ] = useState('');
   const [category, setCategory] = useState('');
   const [page, setPage] = useState(1);
-  const per_page = 10; //一頁筆數
+  const per_page = 10;
   const [total, setTotal] = useState(0); 
   const totalPages = Math.ceil(total / per_page);
 
   useEffect(() => {
   async function run() {
-    console.log('useEffect 02')
-    const res = await loadItems({ page, per_page:per_page, name: q , category: category }); //第二次呼叫loadItems
+    const res = await loadItems({ page, per_page:per_page, name: q , category: category });
     if (res) setTotal(res.total);
   }
   run();
 }, [page]);
 
  async function doSearch(){
-    console.log('q='+q);
-    console.log('category='+category);
     setPage(1);
     if(q || category) res = await loadItems({ page:1, per_page:per_page, name: q , category: category  });
     else if(!q && !category)  res = await loadItems();  
@@ -499,7 +465,7 @@ function Explorer(){
   return (
     <div>
       <div className="card mb-3">
-        <div className="flex gap-2">
+        <div className="flex flex-col sm:flex-row gap-2">
           <input className="flex-1 border rounded p-2" placeholder="搜尋商品名稱或描述" value={q} onChange={e=>setQ(e.target.value)} />          
           <select className="flex-1 border rounded p-2" value={category} onChange={e=>setCategory(e.target.value)}>
             <option>全部商品</option>
@@ -533,8 +499,6 @@ function Explorer(){
     </div>
   )
 }
-
-/* ItemCard 與 ItemDetail Modal */
 function ItemCard({item}){
   const { user, addFavorite, removeFavorite, createTransaction, createReport } = useApp();
   const [showDetail, setShowDetail] = useState(false);
@@ -554,12 +518,12 @@ function ItemCard({item}){
 
   return (
     <>
-      <div className="card flex gap-3">
-        <div className="w-36">
+      <div className="card flex flex-col sm:flex-row gap-3">
+        <div className="w-full sm:w-36">
           <img className="thumb" src={item.images && item.images[0] ? fixImageUrl(item.images[0]) : ''} alt={item.name} />
         </div>
         <div className="flex-1">
-          <div className="flex justify-between">
+          <div className="flex justify-between flex-col sm:flex-row gap-1">
             <div>
               <div className="font-semibold">{item.name}</div>
               <div className="text-xs text-gray-500">{item.category} · {item.condition}</div>
@@ -594,19 +558,16 @@ function ItemCard({item}){
           </div>
         </div>
       </div>
-      {/* ★ Modal 在這裡 */}
       {showDetail && <ItemDetailModal itemId={item.id} onClose={()=>setShowDetail(false)} />}
     </>
   )
 }
-
 function ItemDetailModal({itemId, onClose}){
   const { getItem, user, createTransaction } = useApp();
   const [item, setItem] = useState(null);
   const [err, setErr] = useState('');
 
   useEffect(()=>{
-    console.log('useEffect 01')
     getItem(itemId).then(setItem).catch(e=> setErr(e.payload?.message || JSON.stringify(e.payload)));
   },[itemId]);
 
@@ -614,15 +575,15 @@ function ItemDetailModal({itemId, onClose}){
   if(!item) return <div className="fixed inset-0 flex items-center justify-center z-50"><div className="card">載入中...</div></div>;
 
   return (
-    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center">
-      <div className="bg-white rounded-lg shadow-lg p-6 w-[900px] max-w-full relative">
-        <div className="flex justify-between items-start">
+    <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center overflow-auto">
+      <div className="bg-white rounded-lg shadow-lg p-4 sm:p-6 w-full sm:w-[500px] md:w-[700px] lg:w-[900px] max-w-full relative">
+        <div className="flex flex-col sm:flex-row justify-between items-start gap-2">
           <h2 className="text-xl font-semibold">{item.name}</h2>
           <div className="text-sm text-gray-500">{item.category} · {item.condition}</div>
         </div>
 
-        <div className="mt-4 flex gap-4">
-          <div className="w-1/3 space-y-2 max-h-80 overflow-y-auto pr-2">
+        <div className="mt-4 flex flex-col md:flex-row gap-4">
+          <div className="w-full md:w-1/3 space-y-2 max-h-80 overflow-y-auto pr-2">
               {item.images && item.images.length > 0 ? (
                 item.images.map((u, i) => (
                   <img
@@ -643,9 +604,7 @@ function ItemDetailModal({itemId, onClose}){
             <div className="text-2xl font-bold">NT$ {item.price}</div>
             <div className="mt-2 text-gray-700">{item.description || '無描述'}</div>
             <div className="mt-3 text-sm text-gray-500">賣家：{item.seller_email}</div>
-           
-
-            <div className="mt-4 flex gap-2">
+            <div className="mt-4 flex flex-wrap gap-2">
               <button className="px-3 py-2 bg-primary-600 text-white rounded" onClick={async ()=>{
                 if(!user){ alert('請先登入'); return; }
                 try{
@@ -666,7 +625,6 @@ function ItemDetailModal({itemId, onClose}){
             </div>
           </div>
         </div>
-
         <div className="mt-4 text-right">
           <button className="px-3 py-1 bg-gray-200 rounded" onClick={onClose}>關閉</button>
         </div>
@@ -674,8 +632,6 @@ function ItemDetailModal({itemId, onClose}){
     </div>
   )
 }
-
-/* 新增商品（上架） */
 function NewItemCard(){
   const { user, uploadItem } = useApp();
   const [name, setName] = useState('');
@@ -709,8 +665,8 @@ function NewItemCard(){
       <div className="font-semibold">刊登商品</div>
       <div className="mt-2 space-y-2 text-sm">
         <input className="w-full border rounded p-2" placeholder="商品名稱" value={name} onChange={e=>setName(e.target.value)} />
-        <div className="flex gap-2">
-          <input className="border rounded p-2 w-32" placeholder="價格" type="number" min="0" step="50" value={price} onChange={e=>setPrice(e.target.value)} />
+        <div className="flex gap-2 flex-col sm:flex-row">
+          <input className="border rounded p-2 w-full sm:w-32" placeholder="價格" type="number" min="0" step="50" value={price} onChange={e=>setPrice(e.target.value)} />
           <select className="flex-1 border rounded p-2" value={category} onChange={e=>setCategory(e.target.value)}>
             <option>書籍</option>
             <option>文具</option>
@@ -729,68 +685,53 @@ function NewItemCard(){
         </select>
         <textarea className="w-full border rounded p-2" rows="3" placeholder="描述" value={desc} onChange={e=>setDesc(e.target.value)}></textarea>
        <div>
-  <input
-    type="file"
-    multiple
-    accept="image/*"
-    onChange={(e) => {
-      const selected = Array.from(e.target.files || []);
-
-      setFiles(prev => {
-        // 目前已有的檔案數量
-        const currentCount = prev.length;
-
-        // 只允許最多 5 張
-        const allowed = 5 - currentCount;
-
-        if (allowed <= 0) {
-          alert("最多只能上傳 5 張圖片");
-          return prev;
-        }
-
-        // 如果選的檔案超出上限，只取前 allowed 張
-        const toAdd = selected.slice(0, allowed);
-
-        return [...prev, ...toAdd];
-      });
-
-      // 清掉 input 否則同檔案不能重選
-      e.target.value = "";
-    }}
-  />
-
-  <div className="text-xs text-gray-500">
-    最多 5 張。
-  </div>
-
-  <div className="mt-2 flex gap-2 flex-wrap">
-    {files.map((f, i) => (
-      <div
-        key={i}
-        className="relative w-20 h-20 bg-gray-100 rounded overflow-hidden"
-      >
-        {/* 刪除按鈕 */}
-        <button
-          type="button"
-          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
-          onClick={() => {
-            setFiles(prev => prev.filter((_, index) => index !== i));
+        <input
+          type="file"
+          multiple
+          accept="image/*"
+          onChange={(e) => {
+            const selected = Array.from(e.target.files || []);
+            setFiles(prev => {
+              const currentCount = prev.length;
+              const allowed = 5 - currentCount;
+              if (allowed <= 0) {
+                alert("最多只能上傳 5 張圖片");
+                return prev;
+              }
+              const toAdd = selected.slice(0, allowed);
+              return [...prev, ...toAdd];
+            });
+            e.target.value = "";
           }}
-        >
-          ×
-        </button>
-
-        {/* 圖片預覽 */}
-        <img
-          src={URL.createObjectURL(f)}
-          className="w-full h-full object-cover"
-          alt=""
         />
+        <div className="text-xs text-gray-500">
+          最多 5 張。
+        </div>
+        <div className="mt-2 flex gap-2 flex-wrap">
+          {files.map((f, i) => (
+            <div
+              key={i}
+              className="relative w-20 h-20 bg-gray-100 rounded overflow-hidden"
+            >
+              <button
+                type="button"
+                className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs"
+                onClick={() => {
+                  setFiles(prev => prev.filter((_, index) => index !== i));
+                }}
+              >
+                ×
+              </button>
+              <img
+                src={URL.createObjectURL(f)}
+                className="w-full h-full object-cover"
+                alt=""
+              />
+            </div>
+          ))}
+        </div>
       </div>
-    ))}
-  </div>
-</div>
-        <div className="flex justify-between items-center">
+        <div className="flex flex-col sm:flex-row justify-between items-center">
           <div className="text-sm text-green-600">{msg}</div>
           <div className="flex gap-2">
             <button className="px-3 py-1 bg-primary-600 text-white rounded" onClick={submit}>上架商品</button>
@@ -800,10 +741,8 @@ function NewItemCard(){
     </div>
   )
 }
-
-/* 我的概覽：收藏、交易、管理檢舉（給管理員） */
 function MyOverview(){
-  const { user, getFavorites, getTransactionsFor, getReports, adminDeleteItem,adminMarkReportHandled } = useApp();
+  const { user, getFavorites, getTransactionsFor, getReports, adminDeleteItem, adminMarkReportHandled } = useApp();
   const [favs, setFavs] = useState([]);
   const [txs, setTxs] = useState([]);
   const [reports, setReports] = useState([]);
@@ -836,40 +775,35 @@ function MyOverview(){
               <div className="font-medium text-sm">{i.name}</div>
               <div className="text-xs text-gray-500"> NT$ {i.price}</div>
             </div>
-             {/* 取消收藏按鈕 */} <button
-      className="text-red-500 text-xs hover:underline"
-      onClick={async (e) => {
-        e.stopPropagation();
-        await apiFetch(API_BASE + '/favorite/', {
-          method: 'DELETE',
-          body: JSON.stringify({ item_id: i.id })
-        });
-        alert("已取消收藏");
-      }}
-    >
-      取消
-    </button>
-   
+             <button
+              className="text-red-500 text-xs hover:underline"
+              onClick={async (e) => {
+                e.stopPropagation();
+                await apiFetch(API_BASE + '/favorite/', {
+                  method: 'DELETE',
+                  body: JSON.stringify({ item_id: i.id })
+                });
+                alert("已取消收藏");
+              }}
+            >
+              取消
+            </button>
           </div>)}
           {favs.length === 0 && <div className="text-xs text-gray-500">尚無收藏</div>}
         </div>
       </div>
 
-   <div className="card">
-        <div className="font-semibold">交易紀錄 ({txs.length})</div>
-        <div className="mt-2 text-sm space-y-2">
-          {txs.slice(0,4).map(t => <div key={t.id} className="border p-2 rounded cursor-pointer hover:bg-gray-50" onClick={() => setShowItemModal(t.item_id)}>
-            <div className="flex justify-between"><div>交易 #{t.id}</div><div className="text-xs text-gray-500">{t.created_at ? new Date(t.created_at).toLocaleString() : ''}</div></div>
-            <div className="text-xs">商品：{t.item_name} · 狀態：{t.status}</div>
-          </div>)}
-          {txs.length===0 && <div className="text-xs text-gray-500">尚無交易</div>}
+      <div className="card">
+            <div className="font-semibold">交易紀錄 ({txs.length})</div>
+            <div className="mt-2 text-sm space-y-2">
+              {txs.slice(0,4).map(t => <div key={t.id} className="border p-2 rounded cursor-pointer hover:bg-gray-50" onClick={() => setShowItemModal(t.item_id)}>
+                <div className="flex justify-between"><div>交易 #{t.id}</div><div className="text-xs text-gray-500">{t.created_at ? new Date(t.created_at).toLocaleString() : ''}</div></div>
+                <div className="text-xs">商品：{t.item_name} · 狀態：{t.status}</div>
+              </div>)}
+              {txs.length===0 && <div className="text-xs text-gray-500">尚無交易</div>}
+            </div>
         </div>
-    </div>
-
-   
-      {/* ★ Modal 在這裡 */}
       {showItemModal && ( <ItemDetailModal itemId={showItemModal} onClose={() => setShowItemModal(null)}/> )}
-
       {user.is_admin && (
         <div className="card">
           <div className="flex justify-between items-center">
@@ -884,20 +818,15 @@ function MyOverview(){
                 <div className="mt-2 flex gap-2">
                   <button className="px-2 py-1 bg-red-500 text-white rounded" onClick={()=>{
                     if(confirm('確認刪除此商品（管理員操作）？')) {
-                     // adminDeleteItem(r.target_id).then(()=>{ alert('已刪除'); setReports(rs => rs.filter(x=>x.id!==r.id)) }).catch(()=>alert('刪除失敗'));
                       adminDeleteItem(r.target_id)
                         .then(() => {
                           alert('已刪除商品');
-                          // 標記檢舉為已處理
-                          console.log("report_id=" + r.id);
                           return adminMarkReportHandled(r.id);
                         })
                         .then(() => {
-                          // 從列表中移除已處理的檢舉
                           setReports(rs => rs.filter(x => x.id !== r.id));
                         })
-                        .catch(() => alert(e.payload?.message || JSON.stringify(e.payload) || '操作失敗'));
-                       
+                        .catch(() => alert('操作失敗'));
                     }
                   }}>刪除商品</button>
                 </div>
@@ -910,9 +839,7 @@ function MyOverview(){
     </div>
   )
 }
-
-/* ========== Render ========== */
 ReactDOM.createRoot(document.getElementById('root')).render(<App />);
-
 </script>
 </body>
+</html>
